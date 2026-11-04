@@ -40,6 +40,9 @@ a:hover { text-decoration-thickness: 2px; }
 .topbar__inner { display: flex; align-items: center; justify-content: space-between; gap: var(--space-lg); min-height: 3.75rem; }
 .wordmark { font: 600 var(--text-base)/1 var(--font-display); letter-spacing: var(--tracking-display); color: var(--color-ink); text-decoration: none; }
 .wordmark span { color: var(--color-accent); }
+.wordmark { display: inline-flex; align-items: center; gap: var(--space-xs); }
+.logo { height: 1.75rem; width: auto; flex: none; stroke: var(--color-mark); }
+.logo__body { fill: var(--color-mark-fill); }
 .topbar__meta { display: flex; gap: var(--space-lg); align-items: center; font-size: var(--text-sm); color: var(--color-muted); }
 
 /* page head */

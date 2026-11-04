@@ -17,6 +17,8 @@
   --color-focus: oklch(46% 0.190 350);
   --color-sheet: oklch(93.5% 0.008 245);
   --color-scrim: oklch(16% 0.020 245 / 0.06);
+  --color-mark: oklch(32% 0.105 10);
+  --color-mark-fill: oklch(98.5% 0.003 245);
 
   --font-display: "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
   --font-body: "Newsreader", ui-serif, Georgia, serif;

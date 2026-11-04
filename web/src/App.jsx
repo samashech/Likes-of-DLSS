@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import AddScene from "./AddScene.jsx";
 import Chart from "./Chart.jsx";
+import Logo from "./Logo.jsx";
 import RegionPicker from "./RegionPicker.jsx";
 import Viewer, { loadImage } from "./Viewer.jsx";
 
@@ -422,9 +423,8 @@ function Shell({ children }) {
     <>
       <nav className="topbar" aria-label="Site">
         <div className="container topbar__inner">
-          <a className="wordmark" href="./" aria-label="Likes of DLSS, home">Likes of DLSS <span>4×</span></a>
+          <a className="wordmark" href="./" aria-label="Likes of DLSS, home"><Logo />Likes of DLSS <span>4×</span></a>
           <div className="topbar__meta">
-            <span>Numerical methods lab project</span>
             <a href={`${REPO}/blob/main/decisions.md`}>Design decisions</a>
             <a href={REPO}>Source</a>
           </div>
