@@ -35,6 +35,21 @@ export const SECTIONS = [
     highlight: [0, 2],
   },
   {
+    id: "lanczos",
+    title: "Sharper single-frame filters lose on aliased input",
+    exp: "Exp 3",
+    decision: 8,
+    note: "Single-frame 4× upscale, PSNR in dB. Test scene: mean of 32 frames. Cyberpunk 2077: frame 3, RGB.",
+    head: ["Filter", "Taps per axis", "Test scene", "Cyberpunk 2077"],
+    rows: [
+      ["Bilinear", "2", "14.00", "25.53"],
+      ["Lagrange cubic", "4", "13.69", "25.41"],
+      ["Lanczos-3 (windowed sinc)", "6", "13.24", "25.02"],
+    ],
+    finding: "Lanczos is the standard high-quality resize, yet it scores lowest: the sharper the reconstruction, the more it amplifies the aliasing already in one frame's samples. No single-frame filter can recover detail that was never sampled; only more samples can.",
+    highlight: [0],
+  },
+  {
     id: "newton",
     title: "Lagrange against Newton forward and backward differences",
     exp: "Exp 3 and 4",

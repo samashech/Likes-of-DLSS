@@ -54,6 +54,7 @@ METHODS = [
     ("nearest", "Low-res input (nearest)", "single frame", spatial(1)),
     ("bilinear", "Bilinear", "single frame", spatial(2)),
     ("lagrange", "Lagrange cubic", "single frame", spatial(4)),
+    ("lanczos", "Lanczos-3", "single frame", lambda ch: [upscale(f.low, f_scale(ch), f.jitter, method="lanczos") for f in ch]),
     ("edge", "Temporal, edge-aware clamp", "temporal", lambda ch: run(ch, f_scale(ch), Params(diffuse_t=0))),
     ("full", "Temporal, edge clamp + RK4", "temporal", lambda ch: run(ch, f_scale(ch))),
 ]

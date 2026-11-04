@@ -66,7 +66,7 @@ export default function Benchmarks({ scenes, onOpen }) {
           <div className="tablescroll">
             <table>
               <thead>
-                <tr><th>Scene</th><th>Resolution</th><th className="num">Bilinear</th><th className="num">Lagrange</th><th className="num">Temporal</th><th className="num">Gain</th><th className="num">RMS error</th></tr>
+                <tr><th>Scene</th><th>Resolution</th><th className="num">Bilinear</th><th className="num">Lagrange</th><th className="num">Lanczos-3</th><th className="num">Temporal</th><th className="num">Gain</th><th className="num">RMS error</th></tr>
               </thead>
               <tbody>
                 {rows.map((r) => {
@@ -77,9 +77,10 @@ export default function Benchmarks({ scenes, onOpen }) {
                       <td>{r.res}</td>
                       <td className="num">{r.psnr.bilinear.at(-1).toFixed(2)}</td>
                       <td className="num">{r.psnr.lagrange.at(-1).toFixed(2)}</td>
+                      <td className="num">{r.psnr.lanczos ? r.psnr.lanczos.at(-1).toFixed(2) : "not run"}</td>
                       <td className="num is-accent">{r.psnr.full.at(-1).toFixed(2)}</td>
                       <td className="num">+{g.toFixed(2)}</td>
-                      <td className="num">{(10 ** (g / 20)).toFixed(2)}× lower</td>
+                      <td className="num">{(10 ** (g / 20)).toFixed(2)}× <span className="unit">lower</span></td>
                     </tr>
                   );
                 })}
@@ -88,7 +89,8 @@ export default function Benchmarks({ scenes, onOpen }) {
           </div>
         )}
         <p className="bm__finding">
-          Temporal is the full method: edge-aware clamp plus RK4 diffusion. The game scenes use parameters tuned on the
+          Temporal is the full method: edge-aware clamp plus RK4 diffusion. Gain is against bilinear, the best
+          single-frame method on every scene. The game scenes use parameters tuned on the
           test scene and never re-tuned, so they double as a transfer test.
         </p>
       </section>

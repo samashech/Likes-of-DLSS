@@ -308,3 +308,21 @@ This is how upscalers are commonly evaluated: start from a high-quality referenc
 **Raw frames mode** (`import_scene.py raw <folder>`) takes your own low-res jittered frames plus `frames.json` (scale, jitter per frame, and optionally motion). It's for genuinely rendered input such as Blender or an engine. There's no ground truth, so the UI hides every score. If `motion` is missing, it's estimated once on luminance by registration (decision 20) and reused for all three channels.
 
 **Storage:** game frames are near-lossless WebP (quality 95). PSNR is computed in Python *before* compression, so the scores are exact, and any compression is visible only in the picture.
+
+---
+
+## 23. Two demo additions: a Lanczos baseline and an error heatmap
+
+**Lanczos-3 baseline** (`tsr/interp.py: lanczos_matrix`), written by hand like everything else. It uses the windowed sinc L(x) = sinc(x)·sinc(x/3) with 6 taps, normalised, in the same matrix form as Lagrange. Tests check that it reproduces the samples at their own positions and keeps a flat image flat.
+
+Lanczos is the standard high-quality resize, and **it scores lowest of the single-frame filters on every scene**:
+
+| last frame | bilinear | Lagrange | Lanczos-3 |
+|---|---|---|---|
+| test scene | 14.04 | 13.71 | 13.25 |
+| Cyberpunk 2077 | 25.60 | 25.48 | 25.11 |
+| Sifu | 29.11 | 29.04 | 28.69 |
+
+This is decision 8 again: the sharper the reconstruction, the more it amplifies the aliasing already in one frame's samples. Including it makes the comparison harder to dismiss, because the temporal gain holds against the strongest standard filter too.
+
+**Error heatmap** (`web/src/Viewer.jsx`). "Show: Error against ground truth" draws |output − truth| per pixel, averaged over R, G and B, for both sides of the wipe. The browser computes it from images it has already loaded, so nothing is re-exported. The ramp runs sheet → magenta → ink on a **linear** scale up to 15% of full brightness. A square-root scale was tried first; it made even the good method look mostly pink, which understated the difference.

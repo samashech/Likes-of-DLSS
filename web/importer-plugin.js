@@ -74,7 +74,7 @@ function startJob({ mode, name, files, framesJson, estimateMotion }) {
 
   const args = ["-u", join(ROOT, "scripts/import_scene.py"), mode, source, "--name", String(name).slice(0, 80), "--id", id];
   if (mode === "raw" && estimateMotion) args.push("--estimate-motion");
-  const job = { id: `${id}-${Date.now()}`, status: "running", log: [], scene: null, started: Date.now(), progress: [0, 5] };
+  const job = { id: `${id}-${Date.now()}`, status: "running", log: [], scene: null, started: Date.now(), progress: [0, 6] };
   const child = spawn(PYTHON, args, { cwd: ROOT });
   const onLine = (buf) => {
     for (const line of buf.toString().split("\n").filter(Boolean)) {

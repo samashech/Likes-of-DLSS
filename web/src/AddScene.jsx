@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-const STEPS = ["Rendering the frames", "Bilinear", "Lagrange cubic", "Temporal, edge-aware clamp", "Temporal, edge clamp + RK4"];
+const STEPS = ["Rendering the frames", "Bilinear", "Lagrange cubic", "Lanczos-3", "Temporal, edge-aware clamp", "Temporal, edge clamp + RK4"];
 const EXAMPLE = `{
   "scale": 4,
   "jitter": [[0.0, -0.167], [-0.25, 0.167], ...],
@@ -69,7 +69,7 @@ export default function AddScene({ onDone, onClose }) {
       const r = await fetch("/api/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || `The server answered ${r.status}.`);
-      setJob({ id: j.job, progress: [0, 5], log: [], started: Date.now() });
+      setJob({ id: j.job, progress: [0, 6], log: [], started: Date.now() });
       setPhase("running");
     } catch (err) {
       setPhase("idle");
@@ -78,7 +78,7 @@ export default function AddScene({ onDone, onClose }) {
   };
 
   const elapsed = job ? Math.round(((job.finished ?? now) - job.started) / 1000) : 0;
-  const [step, total] = job?.progress ?? [0, 5];
+  const [step, total] = job?.progress ?? [0, 6];
   const busy = phase === "uploading" || phase === "running";
 
   return (

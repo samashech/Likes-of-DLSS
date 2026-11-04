@@ -38,6 +38,7 @@ METHODS = [
     ("nearest", "Nearest neighbour", "single frame", lambda fr: [upscale(f.low, SCALE, f.jitter, 1) for f in fr]),
     ("bilinear", "Bilinear", "single frame", lambda fr: [upscale(f.low, SCALE, f.jitter, 2) for f in fr]),
     ("lagrange", "Lagrange cubic", "single frame", lambda fr: [upscale(f.low, SCALE, f.jitter, 4) for f in fr]),
+    ("lanczos", "Lanczos-3", "single frame", lambda fr: [upscale(f.low, SCALE, f.jitter, method="lanczos") for f in fr]),
     ("noclamp", "Temporal, no clamp", "temporal", temporal(clamp="none", diffuse_t=0)),
     ("minmax", "Temporal, min/max clamp", "temporal", temporal(clamp="minmax", diffuse_t=0)),
     ("edge", "Temporal, edge-aware clamp", "temporal", temporal(diffuse_t=0)),

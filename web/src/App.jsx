@@ -4,7 +4,7 @@ import Benchmarks from "./Benchmarks.jsx";
 import Chart from "./Chart.jsx";
 import Logo from "./Logo.jsx";
 import RegionPicker from "./RegionPicker.jsx";
-import Viewer, { loadImage } from "./Viewer.jsx";
+import Viewer, { ERR_MAX, loadImage } from "./Viewer.jsx";
 
 const DATA = `${import.meta.env.BASE_URL}data`;
 const REPO = "https://github.com/samashech/Likes-of-DLSS";
@@ -18,7 +18,7 @@ const PIPELINE = [
   ["Motion", "Register frame against history", "Gauss-Newton and fsolve, Exp 2e"],
 ];
 
-const DEFAULTS = { page: "demo", scene: "test", left: "lagrange", right: "full", region: "", path: "", frame: -1 };
+const DEFAULTS = { page: "demo", view: "picture", scene: "test", left: "lagrange", right: "full", region: "", path: "", frame: -1 };
 
 /** Read and write the view state in the query string, so a view can be shared. */
 function useUrlState(defaults) {
@@ -207,6 +207,7 @@ export default function App() {
   const gain = truthy ? path.psnr.full.at(-1) - path.psnr.bilinear.at(-1) : null;
   const jit = path.jitter[frame];
   const isGame = scene.kind !== "synthetic";
+  const showError = truthy && view.view === "error";
   const sizes = isGame ? [120, 160, 240] : [80, 120, 160];
   const aspect = scene.height / scene.width;
   const isFull = region.w >= scene.width;
@@ -254,8 +255,14 @@ export default function App() {
               <div><strong>{leftM.label}</strong> <span className="num">{fmt(left)}</span></div>
               <div className="is-right"><strong>{rightM.label}</strong> <span className="num">{fmt(right)}</span></div>
             </div>
-            <Viewer leftSrc={src(left, frame)} rightSrc={src(right, frame)} region={region} split={split}
+            <Viewer leftSrc={src(left, frame)} rightSrc={src(right, frame)} truthSrc={truthy ? src("truth", frame) : null}
+              error={showError} region={region} split={split}
               onSplit={setSplit} leftLabel={leftM.label} rightLabel={rightM.label} />
+            {showError && (
+              <div className="ramp" aria-hidden="true">
+                <span>No error</span><i /><span>{Math.round(ERR_MAX * 100)}% of full brightness or more</span>
+              </div>
+            )}
             <p className="caption">
               {scene.kind === "synthetic"
                 ? (frame < scene.switchFrame
@@ -296,6 +303,21 @@ export default function App() {
               <select id="right" value={right} onChange={(e) => setView({ right: e.target.value })}>
                 {scene.methods.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
               </select>
+            </div>
+            <div className="field">
+              <fieldset>
+                <legend>Show</legend>
+                <div className="segmented">
+                  {[["picture", "Picture"], ["error", "Error against ground truth"]].map(([id, label]) => (
+                    <label key={id}>
+                      <input type="radio" name="show" checked={(showError ? "error" : "picture") === id} disabled={!truthy}
+                        onChange={() => setView({ view: id })} />
+                      <span>{label}</span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+              {!truthy && <p className="hint">This scene has no ground truth, so there is no error to show.</p>}
             </div>
             <div className="field">
               <fieldset>

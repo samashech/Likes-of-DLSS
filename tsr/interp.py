@@ -128,6 +128,25 @@ def interp_matrix(u, n, m=4):
     return M
 
 
+def lanczos_matrix(u, n, a=3):
+    """Like interp_matrix, but with Lanczos-a weights instead of Lagrange.
+
+    L(x) = sinc(x) sinc(x / a) for |x| < a: the ideal low-pass filter (sinc)
+    cut off by a wider sinc window, the standard high-quality image resize.
+    It is not an interpolating polynomial, so the 2a weights are normalised
+    to sum to 1 (a flat image stays flat).
+    """
+    u = np.asarray(u, float)
+    M = np.zeros((len(u), n))
+    rows = np.arange(len(u))
+    i0 = np.floor(u).astype(int) - (a - 1)
+    w = np.stack([np.sinc(u - (i0 + k)) * np.sinc((u - (i0 + k)) / a) for k in range(2 * a)], -1)
+    w /= w.sum(-1, keepdims=True)
+    for k in range(2 * a):
+        np.add.at(M, (rows, np.clip(i0 + k, 0, n - 1)), w[:, k])
+    return M
+
+
 def sample_grid(img, ux, uy, m=4):
     """img read at every (ux[j], uy[i]): out = My @ img @ Mx^T.
 
@@ -151,5 +170,7 @@ def upscale(low, scale, jitter=(0.0, 0.0), m=4, method="lagrange"):
     uy = (q + 0.5) / scale - 0.5 - jitter[1]
     if method == "lagrange":
         return np.clip(sample_grid(low, ux, uy, m), 0.0, 1.0)
+    if method == "lanczos":
+        return np.clip(lanczos_matrix(uy, h) @ low @ lanczos_matrix(ux, w).T, 0.0, 1.0)
     UX, UY = np.meshgrid(ux, uy)
     return np.clip(sample(low, UX, UY, m, method), 0.0, 1.0)

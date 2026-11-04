@@ -59,6 +59,8 @@ cd web && npm install && npm run dev    # open the printed localhost URL
 - stress-test regions: the zone plate, thin bars, and the light panel used for the ghosting test
 - both camera paths, including the held-out one
 - a PSNR table and one large PSNR chart you can click to seek
+- an error heatmap (|output − truth|) for both sides of the wipe
+- a benchmarks page ("Read the benchmarks") with every measured result
 
 **Game scenes.** Add any high-resolution game screenshot as a scene:
 

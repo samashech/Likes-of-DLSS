@@ -279,3 +279,8 @@ details summary { cursor: pointer; color: var(--color-ink); text-decoration: und
   .bm__setup { grid-template-columns: minmax(0, 1fr); }
   .bm__setup dd { margin-bottom: var(--space-sm); }
 }
+
+/* error ramp legend */
+.ramp { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--space-sm); align-items: center; margin-top: var(--space-xs); font-size: var(--text-sm); color: var(--color-muted); }
+.ramp i { height: 0.5rem; background: linear-gradient(90deg, var(--color-sheet), var(--color-accent), var(--color-ink)); outline: var(--rule-hair) solid var(--color-rule); }
+.unit { font-family: var(--font-body); color: var(--color-muted); }

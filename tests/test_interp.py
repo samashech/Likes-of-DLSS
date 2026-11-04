@@ -42,3 +42,12 @@ def test_matrix_form_equals_pointwise():
     UX, UY = np.meshgrid(ux, uy)
     for m in (1, 2, 4, 8):
         assert np.allclose(sample_grid(img, ux, uy, m), sample(img, UX, UY, m))
+
+
+def test_lanczos_reproduces_samples_and_constants():
+    from tsr.interp import lanczos_matrix
+    v = rng.random(20)
+    # at integer positions sinc is 1 at its own node and 0 at the others
+    assert np.allclose(lanczos_matrix(np.arange(5.0, 15.0), 20) @ v, v[5:15])
+    # a constant signal stays constant anywhere (weights normalised)
+    assert np.allclose(lanczos_matrix(np.linspace(3, 16, 31), 20) @ np.ones(20), 1.0)
