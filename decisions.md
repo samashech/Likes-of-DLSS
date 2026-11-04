@@ -286,3 +286,25 @@ The solver is fine. The reference is the bottleneck. Interpolation and aliasing 
 3. **Registration stops drift.** Noisy vectors add up their errors like a random walk (1.05 px drift by frame 31). Registering against the history anchors each frame to the world map, so the drift stays bounded at about 0.4 px. Per-step error is the wrong metric; the absolute camera position error is the one that matters.
 
 The default stays `motion="given"`, like a real engine. `"estimated"` and `"refined"` remain as options.
+
+---
+
+## 22. Real game imagery: the screenshot is the world, the renderer is simulated
+
+Real jittered frames can't be pulled out of a shipped game like Cyberpunk 2077:
+- the per-frame jitter is hidden inside the engine's projection matrix;
+- screenshots show the image *after* DLSS or TAA has already run;
+- real motion varies per pixel, whereas our upscaler assumes a global camera pan (decision 12).
+
+So game mode (`tsr/photo.py`, `scripts/import_scene.py image ...`) treats a high-resolution game screenshot as the **ground-truth world**:
+1. The screenshot is Lanczos-downscaled to 1280×720, plus a 16 px margin for the pan.
+2. A simulated renderer pans across it and takes one Halton-jittered sample per low-res pixel, giving 320×180 frames. Between pixels the world is read with cubic Lagrange interpolation.
+3. The upscaler rebuilds 1280×720, one colour channel at a time, using the core unchanged.
+
+This is how upscalers are commonly evaluated: start from a high-quality reference, simulate the low-res input, measure the error. The demo labels it as a simulated renderer, never as the game's own frames.
+
+**Result:** Cyberpunk 2077 goes from 25.6 dB (bilinear) to **36.1 dB** on the last frame, **+10.5 dB**. That's larger than on the synthetic scene. σ and α were tuned on the synthetic scene and were *not* re-tuned here, so this doubles as a transfer test. Region presets are chosen automatically: the 160×90 tiles where temporal removes the most squared error relative to Lagrange.
+
+**Raw frames mode** (`import_scene.py raw <folder>`) takes your own low-res jittered frames plus `frames.json` (scale, jitter per frame, and optionally motion). It's for genuinely rendered input such as Blender or an engine. There's no ground truth, so the UI hides every score. If `motion` is missing, it's estimated once on luminance by registration (decision 20) and reused for all three channels.
+
+**Storage:** game frames are near-lossless WebP (quality 95). PSNR is computed in Python *before* compression, so the scores are exact, and any compression is visible only in the picture.

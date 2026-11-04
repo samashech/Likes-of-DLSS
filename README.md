@@ -60,6 +60,15 @@ cd web && npm install && npm run dev    # open the printed localhost URL
 - both camera paths, including the held-out one
 - a PSNR table and one large PSNR chart you can click to seek
 
+**Game scenes.** Add any high-resolution game screenshot as a scene:
+
+```bash
+.venv/bin/python scripts/import_scene.py image uploads/cyberpunk.jpg --name "Cyberpunk 2077"    # about 3 min
+.venv/bin/python scripts/import_scene.py raw my_frames/ --name "My renders"   # your own jittered frames + frames.json
+```
+
+In image mode the screenshot becomes the ground-truth world: a simulated renderer pans across it and sends 320×180 jittered frames, which are upscaled to 1280×720. On Cyberpunk 2077 that's 25.6 dB (bilinear) vs 36.1 dB (temporal) on the last frame. Raw mode takes real rendered frames and their jitter; it has no ground truth, so no scores (`decisions.md` §22).
+
 The view is kept in the URL, so a link reopens the exact comparison. `npm run build` produces `web/dist/`, which any static host can serve.
 
 The UI follows the [Hallmark](https://github.com/Nutlope/hallmark) design skill (Almanac theme, app-screen scope).

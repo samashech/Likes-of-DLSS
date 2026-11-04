@@ -4,3 +4,4 @@ __pycache__/
 out/cache/
 .claude/skills/hallmark/
 .hallmark/
+uploads/
