@@ -1,0 +1,52 @@
+/* Hallmark · v2.0.0 · theme: almanac (deal: manual, scripts not run) · genre: modern-minimal · shape: app screen · posture: restrained · signature: the wipe across one frame, single-frame against temporal · scope: app */
+/* critique: an instrument, not a dashboard: one viewer on the sheet, one chart set large, figures in mono columns; magenta marks the series the page argues from and the one primary control. */
+
+:root {
+  --color-paper: oklch(84% 0.012 245);
+  --color-paper-2: oklch(81% 0.012 245);
+  --color-paper-3: oklch(77% 0.012 245);
+  --color-ink: oklch(16% 0.020 245);
+  --color-ink-2: oklch(24% 0.018 245);
+  --color-muted: oklch(38% 0.016 245);
+  --color-rule: oklch(73% 0.013 240);
+  --color-rule-2: oklch(32% 0.018 240);
+  --color-accent: oklch(45% 0.180 350);
+  --color-accent-2: oklch(37% 0.160 350);
+  --color-accent-ink: oklch(97% 0.006 245);
+  --color-accent-wash: oklch(45% 0.180 350 / 0.10);
+  --color-focus: oklch(46% 0.190 350);
+  --color-sheet: oklch(93.5% 0.008 245);
+  --color-scrim: oklch(16% 0.020 245 / 0.06);
+
+  --font-display: "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Newsreader", ui-serif, Georgia, serif;
+  --font-outlier: "IBM Plex Mono", ui-monospace, monospace;
+
+  /* app scale, ratio 1.2 from a 16px body */
+  --text-xs: 0.8125rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.2rem;
+  --text-xl: 1.44rem;
+  --text-2xl: 1.728rem;
+
+  --space-2xs: 0.25rem;
+  --space-xs: 0.5rem;
+  --space-sm: 0.75rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+
+  --radius-card: 0;
+  --radius-pill: 2px;
+  --rule-hair: 1px;
+  --rule-bar: 2px;
+  --tracking-display: -0.02em;
+  --display-weight: 600;
+
+  --control-h: 2.25rem;
+  --container: 84rem;
+  --dur-micro: 120ms;
+  --dur-short: 200ms;
+}
