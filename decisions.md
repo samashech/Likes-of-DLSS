@@ -142,3 +142,55 @@ The clamp costs about 2 dB on static detail, because it sometimes cuts off real 
 | frame 19 | **22.42** | 21.39 | 19.79 | 18.38 |
 
 Early on, few samples exist, so a wider kernel averages more of them. Later there are many, so a narrower kernel keeps more detail. Choosing σ is therefore a real optimisation problem. It's left for the root-finding module (Experiments 2a–d) instead of being hand-picked.
+
+---
+
+## 15. Edges come from the structure tensor, with eigenpairs from a vectorised power method (Experiment 8)
+
+At each pixel, J = blur([Ix², IxIy; IxIy, Iy²]) is a 2×2 symmetric matrix. Gradients use central differences, the derivative of the 3-point Newton interpolant.
+- **Dominant eigenvector v₁:** points across the edge.
+- **v₂:** points along the edge.
+- **λ₁:** the edge strength.
+
+We run the power method on all 262,144 matrices at once (`tsr/edges.py`), and it matches `numpy.linalg.eig` to 10⁻⁶.
+
+**Measured convergence** (`out/04_edges.png`): the error shrinks by about (λ₂/λ₁)² per iteration.
+- Clean edges (ratio < 0.1) converge in about 4 iterations.
+- Mixed regions (0.4–0.6) take about 23.
+- Isotropic texture (0.8–0.95) is still at 10⁻⁶ after 40.
+
+This is the textbook result, seen on real data.
+
+## 16. Edge-aware clamp: the box is widened by α·√λ₁ (fixes most of decision 13's 2 dB cost)
+
+**Diagnosis first:** with the min/max clamp, **12.6%** of true pixel values in the zone plate and the bars fell *outside* the clamp box, against 0% on the flat checkerboard. Detail thinner than the 4-px sample spacing slips between the 3×3 current samples, so the clamp was cutting real detail.
+
+**Fix:** widen the box by α·√λ₁, the local edge strength of the current frame. Structured regions get a looser box, so detail survives. Flat regions keep a tight box, which is where a ghost would be most visible.
+
+| | f19 (static detail) | f21 (just after switch) | last |
+|---|---|---|---|
+| min/max | 19.34 | 19.10 | 20.03 |
+| **edge-aware, α=3** | **20.96** | **20.16** | **21.65** |
+| no clamp | 21.39 | 17.20 (ghost) | 19.52 |
+
+Raising α trades ghosting against detail. Mean ghost error in the panel rises steadily (0.046 at α=2, 0.087 at α=10), while f19 improves. α=3 gives the best last-frame score for now; Module 5 will choose it by root-finding.
+
+**Limitation:** a ghost over a *textured* area gets a loose box and fades more slowly. Visually, texture masks it. DLSS's network makes this call per pixel and better.
+
+## 17. RK4 anisotropic diffusion as a display-only cleanup (Experiment 7)
+
+The PDE is ∂u/∂t = div(D∇u), with D = c₁v₁v₁ᵀ + c₂v₂v₂ᵀ:
+- **Across edges:** c₁ = 1/(1+λ₁/K²), so there's no blurring across.
+- **Along edges:** c₂ = 1, full smoothing.
+
+Discretising space turns it into a linear ODE system du/dt = Au (the method of lines), which RK4 steps forward in time.
+- **Compact differences for the diagonal terms:** central differences can't see a 1-pixel checker pattern, which is exactly the noise we want to remove.
+- **Time step from the power method again (Exp 8):** applied to A it gives ρ(A) = 7.85, close to the theoretical 8 for this stencil. RK4 is stable when dt·ρ < 2.785 (dt < 0.355); Euler only when dt·ρ < 2 (dt < 0.255).
+
+**Verified in `out/04_edges.png`:** Euler at dt=0.3 grows to 10⁴ in 60 steps, while RK4 at the same dt stays bounded. RK4 at dt=0.37 also blows up, as predicted. Error vs dt has slope 1 for Euler and 4 for RK4 (×18 per halving). At dt=0.25, RK4 is about 100× more accurate than Euler.
+
+**Weighted by confidence:** D is multiplied by 1/(1+(W/w₀)²). Uniform smoothing helped early frames (+0.6 dB at frame 2) but hurt later ones, because by then the "dots" are mostly real detail. The 1/(1+W/w₀) falloff still cost 0.1 dB late on, so we use the quadratic, which fades out faster.
+
+The result, T=1, K=0.02, w₀=1: **+0.68 dB at frame 2**, +0.13 at frame 19, −0.03 at the last frame. It's display-only and never fed back into the history, so it can't compound.
+
+**Honest scale of the gain:** diffusion mainly helps right after a cut or reveal, when history is thin. Once history is full, the temporal accumulation has already done the work.

@@ -21,6 +21,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from .diffusion import smooth
+from .edges import edge_strength
 from .interp import sample, upscale
 
 
@@ -28,10 +30,14 @@ from .interp import sample, upscale
 class Params:
     sigma: float = 0.6        # Gaussian width of a sample's footprint, high-res px
     w_max: float = 16.0       # cap on history confidence (1/w_max = min blend factor)
-    clamp: str = "minmax"     # "minmax", "variance" or "none"
+    clamp: str = "edge"       # "edge", "minmax", "variance" or "none"
     gamma: float = 1.0        # variance clamp width in standard deviations
+    alpha: float = 3.0        # edge clamp: box widened by alpha * local edge strength
     w_prior: float = 0.05     # weight of the spatial upscale where history is empty
     m_reproject: int = 8      # Lagrange stencil size for history resampling
+    diffuse_t: float = 1.0    # RK4 anisotropic diffusion time on the output (0 = off)
+    diffuse_K: float = 0.02   # edge threshold of the diffusion
+    diffuse_w0: float = 1.0   # confidence at which diffusion is halved
 
 
 def _neighbourhood(low, op):
@@ -109,9 +115,16 @@ class TemporalUpscaler:
         self.W = np.maximum(sample(self.W, X, Y, m=2), 0) * inside   # off-screen: no history
 
     def clamp(self, low, idx):
-        if self.p.clamp == "minmax":
+        if self.p.clamp in ("minmax", "edge"):
             lo = _neighbourhood(low, lambda s: s.min(0))
             hi = _neighbourhood(low, lambda s: s.max(0))
+            if self.p.clamp == "edge":
+                # Detail thinner than the sample spacing can sit outside the
+                # min/max of the current samples. Widen the box where the
+                # frame shows structure; flat areas (where ghosts would be
+                # most visible) keep the tight box.
+                e = self.p.alpha * edge_strength(low)
+                lo, hi = lo - e, hi + e
         elif self.p.clamp == "variance":
             mu = _neighbourhood(low, lambda s: s.mean(0))
             sd = _neighbourhood(low, lambda s: s.std(0))
@@ -151,7 +164,13 @@ class TemporalUpscaler:
         # Where evidence is thin (first frames, newly revealed edges) lean on
         # the single-frame Lagrange upscale instead of blocky raw samples.
         S = upscale(frame.low, self.scale, frame.jitter, m=4)
-        return np.clip((W * H + self.p.w_prior * S) / (W + self.p.w_prior), 0, 1)
+        out = np.clip((W * H + self.p.w_prior * S) / (W + self.p.w_prior), 0, 1)
+        if self.p.diffuse_t > 0:
+            # Display-only cleanup, never fed back into history. Few samples
+            # means noisy, so smooth there; well-supported pixels stay as is.
+            out = smooth(out, self.p.diffuse_t, self.p.diffuse_K,
+                         weight=1.0 / (1.0 + (W / self.p.diffuse_w0) ** 2))
+        return out
 
 
 def run(frames, scale=4, params=None, mode="world"):
