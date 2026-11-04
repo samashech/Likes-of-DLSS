@@ -43,9 +43,9 @@ function useUrlState(defaults) {
 /** The synthetic test scene's manifest, in the same shape as an imported scene's. */
 function normaliseTest(m) {
   return {
-    ...m, kind: "synthetic", label: "Test scene", base: "", ext: "png",
+    ...m, kind: "synthetic", label: "Test scene", base: "", ext: m.ext ?? "png",
     width: m.size, height: m.size, lowWidth: m.lowSize, lowHeight: m.lowSize, hasTruth: true,
-    overview: "tuning/truth/0.png", motionNote: "camera pan, motion vectors given",
+    overview: `tuning/truth/0.${m.ext ?? "png"}`, motionNote: "camera pan, motion vectors given",
   };
 }
 
@@ -107,7 +107,8 @@ export default function App() {
       .catch(() => setLoadError(true));
   }, [sceneId]);
 
-  const pathId = scene && (scene.paths[view.path] ? view.path : Object.keys(scene.paths)[0]);
+  const viewable = scene ? Object.keys(scene.paths).filter((id) => !scene.paths[id].noFrames) : [];
+  const pathId = scene && (viewable.includes(view.path) ? view.path : viewable[0]);
   const path = scene?.paths[pathId];
   const frames = path?.frames ?? 1;
   const frame = view.frame < 0 || view.frame >= frames
@@ -346,12 +347,12 @@ export default function App() {
                 </div>
               </div>
             </div>
-            {Object.keys(scene.paths).length > 1 && (
+            {viewable.length > 1 && (
               <div className="field">
                 <fieldset>
                   <legend>Camera path</legend>
                   <div className="segmented">
-                    {Object.entries(scene.paths).map(([id, p]) => (
+                    {viewable.map((id) => [id, scene.paths[id]]).map(([id, p]) => (
                       <label key={id}>
                         <input type="radio" name="path" value={id} checked={pathId === id}
                           onChange={() => setView({ path: id })} />
