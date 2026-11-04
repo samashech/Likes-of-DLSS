@@ -100,6 +100,8 @@ cd web && npm run build && cd ..
 cd web/deploy && vercel deploy --prod
 ```
 
+Deploy from `web/deploy` with the CLI only, and keep the Vercel project **disconnected from GitHub**. `vercel link` run inside this repo connects the GitHub repository automatically. Every push then builds the repository root, which has no built site and no demo data, and replaces the live site with a 404. If that happens, run `vercel git disconnect` in `web/deploy`, then deploy again.
+
 ## Tech stack
 
 | Layer | Tools |
