@@ -1,0 +1,144 @@
+# Core Decisions
+
+Only the decisions that shape the project, plus the reason for each, so you can defend them in a viva. New entries get added as modules are built.
+
+---
+
+## 1. What we are building: temporal super-resolution, not a neural network
+
+DLSS has two halves:
+1. **Temporal accumulation.** Gather samples from many jittered frames.
+2. **A neural network** that decides how much of the old frames to trust.
+
+We build half 1 completely. For half 2 we use classical numerical methods: interpolation, clamping, eigenvalues and ODEs.
+
+**Why:** a network needs a training dataset and GPU time, which don't fit in 12 hours. More to the point, the extra detail in DLSS comes from half 1. The network only cleans up mistakes. This approach is the same family as AMD FSR 2 and Unreal TAAU, both of which work without a network.
+
+## 2. The "game" is an analytic function, not a game engine or a photo
+
+`tsr/scene.py` defines brightness `scene(x, y)` at **any real point**: a rotated checkerboard, a zone plate and a line chart.
+
+**Why:**
+- We can render from any sub-pixel camera position, which jitter needs.
+- We get **exact ground truth** at high resolution, so every result has a measured error (PSNR) instead of "looks better".
+- Each pattern is a known stress test. Angled edges show jaggies, the zone plate shows aliasing (moiré), and the thin bars show the resolution limit.
+
+A photo would only give us pixels, so it can't be rendered at sub-pixel offsets without first interpolating it. That would hide the very errors we want to measure.
+
+## 3. Every pixel integrates a 1×1 high-res-pixel footprint, using Simpson's 1/3 rule (Experiments 5, 6)
+
+Each pixel's value is the average of the scene over a small square around its centre:
+
+$$p = \iint_{\text{1×1 footprint}} \text{scene}(x,y)\,dx\,dy$$
+
+We compute this with a hand-written 2D Simpson rule (`tsr/quadrature.py`), checked against `scipy.integrate.simpson` on the lab's arctan integral. The ground truth uses the same footprint, and so does each **low-res** sample: low-res pixels are just spaced 4 px apart and jittered.
+
+**Revised in Module 3.** At first, each low-res pixel averaged its whole 4×4 area, like a blurry camera. That box filter **destroys** fine detail before the upscaler sees it: a pattern with a 4-px period keeps 0% of its contrast. A game rasteriser instead takes **one sharp sample per pixel**. That is why games alias, and it's why jitter can recover the detail.
+
+**Why Simpson over trapezoidal:** the convergence plot in `out/01_frames.png` shows it.
+- Trapezoidal error falls ×4 per halving of h, so it's O(h²).
+- Simpson error falls ×16 per halving once the edges are resolved, so it's O(h⁴).
+- At n=32, Simpson is 34× more accurate for the same cost.
+
+**Honest finding:** at very coarse n (2 or 4), Simpson is *worse* than trapezoidal. Its error formula assumes a smooth integrand, and a sharp edge between samples breaks that assumption. That's why the scene edges are smoothed with `tanh` over 0.3 px.
+
+## 4. Jitter comes from the Halton (2, 3) sequence, 16 frames per cycle
+
+Each frame the camera shifts by a sub-pixel amount inside one low-res pixel. x uses base-2 Halton and y uses base-3.
+
+**Why:** random jitter clumps, so some regions of the pixel would never get sampled. A regular grid lines up with the scene's own patterns. Halton is a low-discrepancy sequence, so any first *N* points spread evenly. After 16 frames each low-res pixel has been sampled at 16 well-spread spots, which is 16× the information of one frame. That is the whole source of the upscaling. DLSS, FSR 2 and Unreal TAA use the same sequence.
+
+## 5. Motion is a known camera pan, like a game's motion vectors
+
+The camera moves (0.37, 0.21) high-res px per frame. Those values are deliberately non-integer, so frames never line up on the pixel grid. The frame generator outputs this motion the way a game engine hands DLSS its motion vectors.
+
+**Why:** DLSS doesn't guess motion; the game engine tells it. Giving the motion vectors exactly keeps the core algorithm honest and testable. Estimating motion from images alone (with `fsolve`, Experiment 2e) is planned as a separate, optional module.
+
+## 6. Scale factor 4× (128×128 → 512×512)
+
+**Why:** this matches DLSS "Ultra Performance" mode territory, and it's large enough that single-frame interpolation clearly fails. At 2×, the gap between methods would be too small to show.
+
+## 7. Plain numpy, every core method written by hand
+
+scipy is used only in tests, to verify our own implementations.
+
+**Why:** the point of the lab is the numerical methods themselves. Calling `scipy.ndimage.zoom` would hide all of them.
+
+---
+
+## 8. Interpolation uses local stencils, and the single-frame baseline is bilinear-grade (Experiments 3, 4)
+
+To read the image at a fractional position, we fit a polynomial through the m nearest pixels on each axis. We do x first, then y (`tsr/interp.py`).
+
+**Why local:** one high-degree polynomial through a whole row of equally spaced pixels causes **Runge's phenomenon**, wild swings near the ends. Small stencils avoid that.
+
+**Measured on the sharp, aliased frames:**
+
+| m | 1 | 2 | 4 | 6 | 8 | 12 |
+|---|---|---|---|---|---|---|
+| PSNR (dB) | 12.50 | **14.05** | 13.75 | 13.57 | 13.46 | 13.32 |
+| Lebesgue constant | 1 | 1.00 | 1.25 | 1.39 | 1.49 | 1.62 |
+
+Higher degree makes things *worse*. The **Lebesgue constant**, max Σ|Lₖ(p)|, is how much interpolation can amplify errors in the data. Aliased samples are full of such errors, so a bigger stencil amplifies them more.
+
+This is a mild relative of Runge, and it's why we don't use high degree for display. Cubic stays the default because it is exact for cubic surfaces and sharper on smooth regions. We report bilinear as the honest single-frame best.
+
+## 9. Lagrange form in the pipeline, Newton forms kept as a verified equivalent
+
+We implemented the Lagrange form plus the Newton forward- and backward-difference forms. Newton uses forward differences in the first half of the stencil and backward in the second, the textbook rule.
+
+**Why all three agree:** through m points there is exactly **one** polynomial of degree m−1. Measured max difference: 7×10⁻¹⁶, which is just rounding.
+
+**Why Lagrange wins in practice:** its weights depend only on the fractional position, not on the pixel values, so they can be reused. It was 74 ms vs 102 ms for Newton per 512×512 upscale.
+
+## 10. The baseline to beat: about 14 dB, limited by aliasing
+
+No single-frame method gets above **14.05 dB**: the samples simply don't contain the detail. In the zone plate, every method shows moiré (fake rings) instead of the real ones. We verified the coordinate convention by flipping the jitter sign, which made results worse, so `u = (q+0.5)/s − 0.5 − jitter` is correct.
+
+---
+
+## 11. Temporal core = confidence-weighted running mean (`tsr/temporal.py`)
+
+Each high-res pixel keeps a value H and a confidence W (how many samples' worth of evidence it holds). Each frame:
+1. **Gather** new samples near the pixel, with Gaussian weights on distance. This gives an estimate C with confidence Wn.
+2. **Blend:** H ← (W·H + Wn·C)/(W + Wn), then W ← W + Wn.
+
+This is the **weighted least-squares** estimate of the pixel from every sample it has ever seen. W is capped at `w_max` = 16, so old evidence slowly fades and the image can still react to change. Where W is still tiny (frame 0, newly revealed edges), the output leans on the single-frame Lagrange upscale.
+
+**Result:** 13.7 dB → **21.4 dB** by frame 19, where the spatial baseline is 13.6. That's +7.8 dB, meaning the RMS error is about 2.5× smaller. Rings and thin bars that no single frame contains are visibly recovered (`out/03_temporal.png`).
+
+## 12. History lives on a world-aligned grid, not re-sampled to the screen every frame
+
+The textbook approach (TAA) resamples the history to the new camera position every frame. Each resample is a mild low-pass filter, and they compound. This is **numerical diffusion**, the same smearing that low-order schemes cause when solving advection equations.
+
+Measured: a 0.37 px cubic resample keeps 76% of a 4-px-period pattern, so after 16 frames 1.2% is left. Even m=8 leaves only 4%.
+
+**Our fix:** the history grid is fixed to the world. It only ever moves by whole pixels (an exact array copy), and the sub-pixel camera offset is applied to where new samples land. Interpolation happens **once**, for display, and never feeds back. Screen-space history (also m=8) reaches 20.3 dB; world-aligned reaches **21.4 dB**.
+
+**Limitation (be upfront about it):** this works because our motion is a global camera translation. With per-object motion, rotation or perspective, a game has to use screen-space reprojection. That's why DLSS and FSR need sharpening, and why DLSS's network learns to undo this blur. `mode="screen"` is kept for that comparison.
+
+The single display resample uses m=8 (+0.3 dB over m=4). It's cheap because it runs once per frame, and with no repeated resampling there's no build-up.
+
+## 13. Anti-ghosting: min/max neighbourhood clamp, a measured trade-off
+
+At frame 20 a panel lights up, but nothing moves, so the motion vectors say "nothing changed". Unclamped history keeps showing the old checkerboard, a **ghost**.
+
+The clamp limits history to the [min, max] range of the 3×3 current low-res samples around each pixel. If history falls outside what the current frame can see, it must be stale.
+
+| | before switch (frame 19) | 2 frames after switch | last frame |
+|---|---|---|---|
+| no clamp | **21.4** | 17.7 (ghost) | 19.5 |
+| min/max clamp | 19.3 | **19.5** | **20.0** |
+
+The clamp costs about 2 dB on static detail, because it sometimes cuts off real detail that the 3×3 low-res neighbourhood can't see. In exchange it removes ghosts almost immediately. Variance clipping (mean ± γσ) was tested and did slightly worse here (17.3 dB, or 17.8 with γ=2).
+
+**This trade-off is exactly what DLSS's neural network exists to solve:** deciding per pixel when history can be trusted. It's our best target for improvement.
+
+## 14. Gather width σ = 0.6 px for now; the best σ depends on history length
+
+| σ (px) | 0.4 | 0.6 | 0.8 | 1.0 |
+|---|---|---|---|---|
+| frame 4 | 17.66 | **17.96** | 17.77 | 17.33 |
+| frame 19 | **22.42** | 21.39 | 19.79 | 18.38 |
+
+Early on, few samples exist, so a wider kernel averages more of them. Later there are many, so a narrower kernel keeps more detail. Choosing σ is therefore a real optimisation problem. It's left for the root-finding module (Experiments 2a–d) instead of being hand-picked.
