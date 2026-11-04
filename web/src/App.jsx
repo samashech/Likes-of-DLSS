@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import AddScene from "./AddScene.jsx";
+import Benchmarks from "./Benchmarks.jsx";
 import Chart from "./Chart.jsx";
 import Logo from "./Logo.jsx";
 import RegionPicker from "./RegionPicker.jsx";
@@ -17,7 +18,7 @@ const PIPELINE = [
   ["Motion", "Register frame against history", "Gauss-Newton and fsolve, Exp 2e"],
 ];
 
-const DEFAULTS = { scene: "test", left: "lagrange", right: "full", region: "", path: "", frame: -1 };
+const DEFAULTS = { page: "demo", scene: "test", left: "lagrange", right: "full", region: "", path: "", frame: -1 };
 
 /** Read and write the view state in the query string, so a view can be shared. */
 function useUrlState(defaults) {
@@ -153,6 +154,16 @@ export default function App() {
     );
   }
 
+  const nav = { page: view.page, onPage: (page) => { setPlaying(false); setView({ page }); window.scrollTo(0, 0); } };
+
+  if (view.page === "benchmarks") {
+    return (
+      <Shell {...nav}>
+        <Benchmarks scenes={scenes} onOpen={(id) => { setView({ page: "demo", scene: id, region: "", path: "", frame: -1 }); window.scrollTo(0, 0); }} />
+      </Shell>
+    );
+  }
+
   const tabs = scenes && (
     <>
       <div className="scenes">
@@ -173,7 +184,7 @@ export default function App() {
 
   if (!scene) {
     return (
-      <Shell>
+      <Shell {...nav}>
         <div className="container">
           <div className="pagehead"><div><h1>Loading the scene</h1></div></div>
           {tabs}
@@ -210,7 +221,7 @@ export default function App() {
   const pickerRegion = isFull ? { x: 0, y: 0, w: sizes[1], h: Math.round(sizes[1] * aspect) } : region;
 
   return (
-    <Shell>
+    <Shell {...nav}>
       <div className="container">
         <header className="pagehead">
           <div>
@@ -418,13 +429,17 @@ export default function App() {
   );
 }
 
-function Shell({ children }) {
+function Shell({ children, page = "demo", onPage = () => {} }) {
   return (
     <>
       <nav className="topbar" aria-label="Site">
         <div className="container topbar__inner">
           <a className="wordmark" href="./" aria-label="Likes of DLSS, home"><Logo />Likes of DLSS <span>4×</span></a>
           <div className="topbar__meta">
+            <a href="?page=benchmarks" aria-current={page === "benchmarks" ? "page" : undefined}
+              onClick={(e) => { e.preventDefault(); onPage(page === "benchmarks" ? "demo" : "benchmarks"); }}>
+              {page === "benchmarks" ? "Back to the demo" : "Read the benchmarks"}
+            </a>
             <a href={`${REPO}/blob/main/decisions.md`}>Design decisions</a>
             <a href={REPO}>Source</a>
           </div>

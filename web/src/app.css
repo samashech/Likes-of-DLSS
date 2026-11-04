@@ -252,3 +252,30 @@ input:disabled { opacity: 0.55; cursor: not-allowed; }
 .code { font-family: var(--font-outlier); font-size: var(--text-xs); background: var(--color-paper-2); padding: var(--space-2xs) var(--space-xs); white-space: pre-wrap; }
 pre.code { margin: var(--space-xs) 0; padding: var(--space-sm); }
 details summary { cursor: pointer; color: var(--color-ink); text-decoration: underline; text-decoration-color: var(--color-accent); text-underline-offset: 0.15em; }
+
+/* benchmarks page */
+.topbar__meta a[aria-current="page"] { text-decoration-thickness: 2px; }
+.toc { display: flex; flex-wrap: wrap; gap: var(--space-2xs) var(--space-lg); padding-bottom: var(--space-lg); margin-bottom: var(--space-xl); border-bottom: var(--rule-hair) solid var(--color-rule); font-size: var(--text-sm); }
+.bm { margin-bottom: var(--space-xl); scroll-margin-top: var(--space-lg); }
+.bm > .hint { margin-bottom: var(--space-sm); max-width: 75ch; }
+.bm table td.num, .bm table th.num { white-space: nowrap; }
+.bm table td:first-child { color: var(--color-ink); }
+.bm td.is-accent { color: var(--color-accent); font-weight: 500; }
+.bm__finding { margin-top: var(--space-md); max-width: 75ch; color: var(--color-ink-2); }
+.bm__refs { display: flex; gap: var(--space-lg); margin-top: var(--space-sm); font-size: var(--text-sm); }
+.bm__figure { display: block; margin-top: var(--space-lg); }
+.bm__figure img { display: block; width: 100%; height: auto; outline: var(--rule-hair) solid var(--color-rule); outline-offset: -1px; background: var(--color-mark-fill); }
+.bm__skeleton { height: 12rem; }
+.bm--detail { padding-block: var(--space-md); }
+.bm--detail summary { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-md); cursor: pointer; text-decoration: none; list-style: none; }
+.bm--detail summary::-webkit-details-marker { display: none; }
+.bm--detail summary h3 { font-size: var(--text-base); text-decoration: underline; text-decoration-color: var(--color-accent); text-underline-offset: 0.15em; }
+.bm--detail[open] summary { margin-bottom: var(--space-md); }
+.bm__setup { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--space-sm) var(--space-xl); margin: 0; }
+.bm__setup dt { font-weight: 500; color: var(--color-ink); }
+.bm__setup dd { margin: 0; max-width: 70ch; }
+.tablescroll { overflow-x: auto; }
+@media (max-width: 60rem) {
+  .bm__setup { grid-template-columns: minmax(0, 1fr); }
+  .bm__setup dd { margin-bottom: var(--space-sm); }
+}
