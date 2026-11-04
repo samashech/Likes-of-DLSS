@@ -109,6 +109,35 @@ def sample(img, ux, uy, m=4, method="lagrange"):
     return newton(rows, py)
 
 
+def interp_matrix(u, n, m=4):
+    """Matrix M (len(u) x n) with (M @ v)[i] = m-point interpolation of v at u[i].
+
+    Interpolation is linear in the data, so on a grid it is a matrix: row i
+    holds the m Lagrange weights for position u[i] (border nodes repeat).
+    """
+    u = np.asarray(u, float)
+    M = np.zeros((len(u), n))
+    rows = np.arange(len(u))
+    if m == 1:
+        np.add.at(M, (rows, np.clip(np.rint(u).astype(int), 0, n - 1)), 1.0)
+        return M
+    i0, p = _stencil(u, m)
+    w = lagrange_weights(p, m)
+    for k in range(m):
+        np.add.at(M, (rows, np.clip(i0 + k, 0, n - 1)), w[:, k])
+    return M
+
+
+def sample_grid(img, ux, uy, m=4):
+    """img read at every (ux[j], uy[i]): out = My @ img @ Mx^T.
+
+    Same result as sample() on a meshgrid, but the weights are computed once
+    per row and column instead of once per pixel (about 20x faster).
+    """
+    h, w = img.shape
+    return interp_matrix(uy, h, m) @ img @ interp_matrix(ux, w, m).T
+
+
 def upscale(low, scale, jitter=(0.0, 0.0), m=4, method="lagrange"):
     """Single-frame upscale by an integer factor.
 
@@ -120,5 +149,7 @@ def upscale(low, scale, jitter=(0.0, 0.0), m=4, method="lagrange"):
     q = np.arange(h * scale)
     ux = (np.arange(w * scale) + 0.5) / scale - 0.5 - jitter[0]
     uy = (q + 0.5) / scale - 0.5 - jitter[1]
+    if method == "lagrange":
+        return np.clip(sample_grid(low, ux, uy, m), 0.0, 1.0)
     UX, UY = np.meshgrid(ux, uy)
     return np.clip(sample(low, UX, UY, m, method), 0.0, 1.0)

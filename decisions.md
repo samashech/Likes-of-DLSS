@@ -134,7 +134,7 @@ The clamp costs about 2 dB on static detail, because it sometimes cuts off real 
 
 **This trade-off is exactly what DLSS's neural network exists to solve:** deciding per pixel when history can be trusted. It's our best target for improvement.
 
-## 14. Gather width σ = 0.6 px for now; the best σ depends on history length
+## 14. Gather width: the best σ depends on history length (tuned in decision 18)
 
 | σ (px) | 0.4 | 0.6 | 0.8 | 1.0 |
 |---|---|---|---|---|
@@ -194,3 +194,55 @@ Discretising space turns it into a linear ODE system du/dt = Au (the method of l
 The result, T=1, K=0.02, w₀=1: **+0.68 dB at frame 2**, +0.13 at frame 19, −0.03 at the last frame. It's display-only and never fed back into the history, so it can't compound.
 
 **Honest scale of the gain:** diffusion mainly helps right after a cut or reveal, when history is thin. Once history is full, the temporal accumulation has already done the work.
+
+---
+
+## 18. Parameters are tuned by root-finding against ground truth (Experiments 2a–d)
+
+This is our counterpart to DLSS training. Nvidia fits a network to ground-truth renders; we fit two numbers to ground truth by solving equations (`scripts/05_tuning.py`).
+
+**Problem 1, σ (gather width).** Maximise the mean PSNR over 32 frames, which means solving P′(σ) = 0. P′ and P″ come from central differences with h = 0.01: the first and second derivative of the quadratic through 3 points, the Newton-difference idea from Exp 4. Bracket [0.3, 0.6]. **σ\* = 0.383.**
+
+**Problem 2, α (clamp width).** Find the largest α whose ghost error one frame after the switch stays under a **5% budget**: solve ghost(α) − 0.05 = 0. ghost(α) rises smoothly, so it has exactly one root. Bracket [0, 8]. **α\* = 2.633.**
+
+The real cost is pipeline runs, not iterations, because every evaluation runs the whole upscaler. Tolerance 10⁻³:
+
+| method | σ: iterations / runs | α: iterations / runs |
+|---|---|---|
+| Bisection | 9 / 22 | 13 / 15 |
+| Regula falsi | 6 / 16 | 8 / 10 |
+| Secant | 6 / 12 | 5 / **5** |
+| Newton-Raphson | 5 / 12 | 5 / 12 |
+
+**What the convergence plots show** (`out/05_tuning.png`):
+- **Bisection** gains one bit per step, a straight line on the log plot, and it doesn't settle steadily, because the midpoint jumps around the root.
+- **Regula falsi** converges linearly. One end of the bracket stays stuck, the classic weakness.
+- **Secant** has order about 1.6.
+- **Newton** is quadratic, reaching 10⁻⁷ in 5 iterations.
+
+**The lesson for the viva:** Newton converges fastest *per iteration*, but each iteration needs f′. In problem 2 that costs 2 extra runs, so secant wins on real cost (5 runs vs 12). In problem 1, P′ already needs P(σ±h), and P″ needs only one more value, P(σ), so Newton and secant tie. Choose the method by cost per evaluation, not by order of convergence.
+
+**Why tuning uses ground truth:** this is offline calibration, just as DLSS is trained offline on reference renders. At run time the upscaler only sees low-res frames.
+
+## 19. Result of tuning
+
+| | mean PSNR | frame 21 (after switch) | last frame |
+|---|---|---|---|
+| single-frame bilinear | 14.00 | – | 14.05 |
+| hand-picked (σ 0.6, α 3, T 1) | 19.90 | 20.17 | 21.62 |
+| tuned (σ 0.383, α 2.63, T 1) | 20.75 | 21.30 | 23.53 |
+| **tuned + diffusion T 0.5 (defaults)** | **20.85** | **21.37** | **23.66** |
+
+**+9.6 dB over single-frame on the last frame, about 3× lower RMS error.**
+
+With the narrower tuned σ, diffusion helps more (mean +0.37 dB at T=0.5, vs +0.1 before): a narrow kernel keeps detail but also noise, and the diffusion cleans up exactly that noise. T was picked by a coarse 3-point scan (0, 0.5, 1), not by root-finding.
+
+**Held-out check (train/test split):** σ and α were tuned on the pan (0.37, 0.21). On an **unseen** pan (−0.29, 0.43), the tuned values still win:
+
+| held-out pan | mean | frame 21 | last |
+|---|---|---|---|
+| hand-picked | 18.98 | 19.63 | 20.44 |
+| **tuned** | **19.94** | **20.91** | **22.31** |
+| bilinear | 14.00 | – | – |
+
+That's +0.96 dB mean and +1.87 dB on the last frame, so the tuning generalises rather than overfitting to one camera path. It's the same scene, though; a different scene would be the stronger test.

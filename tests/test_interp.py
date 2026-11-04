@@ -33,3 +33,12 @@ def test_cubic_reproduced_exactly():
     exact = 0.01 * ux ** 3 - 0.2 * ux * uy + 0.05 * uy ** 2
     for method in ("lagrange", "newton"):
         assert np.allclose(sample(img, ux, uy, 4, method), exact)
+
+
+def test_matrix_form_equals_pointwise():
+    from tsr.interp import sample_grid
+    img = rng.random((16, 20))
+    ux, uy = np.linspace(-1, 21, 37), np.linspace(-2, 17, 29)
+    UX, UY = np.meshgrid(ux, uy)
+    for m in (1, 2, 4, 8):
+        assert np.allclose(sample_grid(img, ux, uy, m), sample(img, UX, UY, m))

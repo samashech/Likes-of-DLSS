@@ -23,19 +23,19 @@ import numpy as np
 
 from .diffusion import smooth
 from .edges import edge_strength
-from .interp import sample, upscale
+from .interp import sample_grid, upscale
 
 
 @dataclass
 class Params:
-    sigma: float = 0.6        # Gaussian width of a sample's footprint, high-res px
+    sigma: float = 0.383      # Gaussian width of a sample's footprint, high-res px
     w_max: float = 16.0       # cap on history confidence (1/w_max = min blend factor)
     clamp: str = "edge"       # "edge", "minmax", "variance" or "none"
     gamma: float = 1.0        # variance clamp width in standard deviations
-    alpha: float = 3.0        # edge clamp: box widened by alpha * local edge strength
+    alpha: float = 2.63       # edge clamp: box widened by alpha * local edge strength
     w_prior: float = 0.05     # weight of the spatial upscale where history is empty
     m_reproject: int = 8      # Lagrange stencil size for history resampling
-    diffuse_t: float = 1.0    # RK4 anisotropic diffusion time on the output (0 = off)
+    diffuse_t: float = 0.5    # RK4 anisotropic diffusion time on the output (0 = off)
     diffuse_K: float = 0.02   # edge threshold of the diffusion
     diffuse_w0: float = 1.0   # confidence at which diffusion is halved
 
@@ -109,10 +109,10 @@ class TemporalUpscaler:
     def reproject(self, motion):
         """Pixel q now shows the world point that was at q + motion last frame."""
         hh, ww = self.H.shape
-        X, Y = np.meshgrid(np.arange(ww) + motion[0], np.arange(hh) + motion[1])
-        inside = (X >= 0) & (X <= ww - 1) & (Y >= 0) & (Y <= hh - 1)
-        self.H = sample(self.H, X, Y, m=self.p.m_reproject)
-        self.W = np.maximum(sample(self.W, X, Y, m=2), 0) * inside   # off-screen: no history
+        x, y = np.arange(ww) + motion[0], np.arange(hh) + motion[1]
+        inside = ((y >= 0) & (y <= hh - 1))[:, None] & ((x >= 0) & (x <= ww - 1))[None, :]
+        self.H = sample_grid(self.H, x, y, m=self.p.m_reproject)
+        self.W = np.maximum(sample_grid(self.W, x, y, m=2), 0) * inside   # off-screen: no history
 
     def clamp(self, low, idx):
         if self.p.clamp in ("minmax", "edge"):
@@ -159,8 +159,8 @@ class TemporalUpscaler:
         H, W = self.H, self.W
         if self.mode == "world":                  # the single display resample
             hh, ww = H.shape
-            X, Y = np.meshgrid(np.arange(ww) + offset[0], np.arange(hh) + offset[1])
-            H, W = sample(H, X, Y, m=self.p.m_reproject), sample(W, X, Y, m=2)
+            x, y = np.arange(ww) + offset[0], np.arange(hh) + offset[1]
+            H, W = sample_grid(H, x, y, m=self.p.m_reproject), sample_grid(W, x, y, m=2)
         # Where evidence is thin (first frames, newly revealed edges) lean on
         # the single-frame Lagrange upscale instead of blocky raw samples.
         S = upscale(frame.low, self.scale, frame.jitter, m=4)
