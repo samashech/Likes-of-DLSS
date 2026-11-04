@@ -52,7 +52,7 @@ Each frame the camera shifts by a sub-pixel amount inside one low-res pixel. x u
 
 The camera moves (0.37, 0.21) high-res px per frame. Those values are deliberately non-integer, so frames never line up on the pixel grid. The frame generator outputs this motion the way a game engine hands DLSS its motion vectors.
 
-**Why:** DLSS doesn't guess motion; the game engine tells it. Giving the motion vectors exactly keeps the core algorithm honest and testable. Estimating motion from images alone (with `fsolve`, Experiment 2e) is planned as a separate, optional module.
+**Why:** DLSS doesn't guess motion; the game engine tells it. Giving the motion vectors exactly keeps the core algorithm honest and testable. Estimating motion from images alone was tested in Module 6 (decisions 20–21), and the results show why engines supply motion vectors.
 
 ## 6. Scale factor 4× (128×128 → 512×512)
 
@@ -246,3 +246,43 @@ With the narrower tuned σ, diffusion helps more (mean +0.37 dB at T=0.5, vs +0.
 | bilinear | 14.00 | – | – |
 
 That's +0.96 dB mean and +1.87 dB on the last frame, so the tuning generalises rather than overfitting to one camera path. It's the same scene, though; a different scene would be the stronger test.
+
+---
+
+## 20. Motion estimation is a 2×2 nonlinear system, solved by Gauss-Newton (Experiment 2e)
+
+Unknown: the shift d = (dx, dy). For a guessed d, read the reference image at the new samples' positions to predict the low-res frame. The mismatch r(d) is smallest at the true shift, so we solve **F(d) = Jᵀr = 0**: 2 nonlinear equations, where J is the image gradient at the samples (`tsr/motion.py`).
+
+**Gauss-Newton:** linearise r, solve the 2×2 normal equations (JᵀJ)Δ = −Jᵀr with `np.linalg.solve`, and stop when `np.linalg.norm(Δ)` < 10⁻⁴. A tiny damping term keeps the matrix invertible.
+
+**Verified against `scipy.optimize.fsolve`:** they agree to 3×10⁻⁶ px. With a perfect reference it converges in **4–5 iterations** to 0.004–0.013 px, the quadratic convergence of Newton's method.
+
+**What failed along the way, and why (each was measured):**
+- **A confidence mask.** It selected 0 samples. Halton jitter puts each new sample in the gaps between old ones, exactly where confidence is lowest. The jitter works as designed, which defeats this mask.
+- **Raw history as the reference.** Early history is blocky, one flat patch per sample, so the gradient is zero inside patches, J vanishes and the system is singular.
+- **A blurred history as the reference.** Comparing a blurred prediction against sharp samples moves the minimum, biasing the result by up to 0.23 px even with a perfect history.
+- **Huber reweighting (IRLS).** No improvement, because outliers weren't the main problem.
+
+## 21. Finding: registration accuracy is set by the reference, so engines must provide motion vectors
+
+| reference image | checkerboard | zone plate (aliased) |
+|---|---|---|
+| ground truth | 0.013 px | 0.004 px |
+| 1-frame Lagrange upscale | 0.18 px | **0.88 px** |
+
+The solver is fine. The reference is the bottleneck. Interpolation and aliasing errors in an upscaled aliased frame are tied to the previous frame's sample positions, so they bias the solution. Without good motion the history stays poor, so the reference stays poor: a vicious circle.
+
+| motion source | final camera drift | mean PSNR | last frame |
+|---|---|---|---|
+| exact vectors (default) | 0 | **20.85** | **23.66** |
+| vectors with 0.15 px noise | 1.05 px | 17.68 | 18.75 |
+| noisy vectors + registration refinement | 0.45 px | 18.45 | 20.63 |
+| **estimated only, no vectors** | 0.41 px | 18.62 | 20.99 |
+| single-frame bilinear | – | 14.00 | 14.05 |
+
+**Three takeaways:**
+1. **Exact motion vectors are worth about 2.7 dB.** That's why DLSS, FSR 2 and XeSS all require them from the game engine. Our experiment measures why.
+2. **Estimation alone still works.** It's +7 dB over single-frame with no motion vectors at all, though each frame's estimate is off by 0.2–0.9 px.
+3. **Registration stops drift.** Noisy vectors add up their errors like a random walk (1.05 px drift by frame 31). Registering against the history anchors each frame to the world map, so the drift stays bounded at about 0.4 px. Per-step error is the wrong metric; the absolute camera position error is the one that matters.
+
+The default stays `motion="given"`, like a real engine. `"estimated"` and `"refined"` remain as options.

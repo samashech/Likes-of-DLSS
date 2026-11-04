@@ -24,6 +24,7 @@ import numpy as np
 from .diffusion import smooth
 from .edges import edge_strength
 from .interp import sample_grid, upscale
+from .motion import estimate
 
 
 @dataclass
@@ -95,12 +96,21 @@ class TemporalUpscaler:
        mode="screen": the textbook TAA way, history resampled to the new
                       screen every frame (works for any motion, but blurs:
                       numerical diffusion).
+       motion="given":     use the engine's motion vectors (like DLSS).
+       motion="estimated": ignore them and find the shift by registering the
+                           new frame against the history (tsr/motion.py).
+       motion="refined":   start from the given vectors and refine them by
+                           the same registration.
     """
 
-    def __init__(self, scale=4, params=None, mode="world"):
+    def __init__(self, scale=4, params=None, mode="world", motion="given", solver="gauss-newton"):
         self.scale = scale
         self.p = params or Params()
         self.mode = mode
+        self.motion_source = motion
+        self.solver = solver
+        self.motions = []           # motion actually used each frame
+        self.iterations = []        # solver iterates per frame (estimated motion)
         self.H = None
         self.W = None
         self.cam = np.zeros(2)      # camera position, accumulated from motion vectors
@@ -135,7 +145,19 @@ class TemporalUpscaler:
 
     def step(self, frame):
         """Feed one frame; returns the displayed high-res image."""
-        self.cam = self.cam + frame.motion
+        motion = frame.motion
+        if self.motion_source != "given" and self.H is not None:
+            # "estimated": constant-velocity guess from last frame's motion.
+            # "refined": start from the engine's (possibly inaccurate) vector.
+            if self.motion_source == "refined":
+                d0 = np.asarray(frame.motion, float)
+            else:
+                d0 = self.motions[-1] if len(self.motions) > 1 else np.zeros(2)
+            motion, hist = estimate(self.R, self.origin, self.cam, frame.low,
+                                    frame.jitter, self.scale, d0, self.solver)
+            self.iterations.append(hist)
+        self.motions.append(np.asarray(motion, float))
+        self.cam = self.cam + motion
         offset = (0.0, 0.0)
         if self.mode == "world":
             new_origin = np.rint(self.cam).astype(int)
@@ -156,6 +178,11 @@ class TemporalUpscaler:
             self.H = (W * self.H + Wn * C) / (W + Wn)
             self.W = W + Wn
 
+        if self.motion_source != "given":
+            # reference for registering the next frame: the displayed blend,
+            # but kept on the history grid (spatial upscale shifted by offset)
+            Sg = upscale(frame.low, self.scale, np.asarray(frame.jitter) + np.asarray(offset) / self.scale)
+            self.R = (self.W * self.H + self.p.w_prior * Sg) / (self.W + self.p.w_prior)
         H, W = self.H, self.W
         if self.mode == "world":                  # the single display resample
             hh, ww = H.shape
@@ -173,7 +200,8 @@ class TemporalUpscaler:
         return out
 
 
-def run(frames, scale=4, params=None, mode="world"):
-    """Run the whole sequence; returns the list of output frames."""
-    tu = TemporalUpscaler(scale, params, mode)
+def run(frames, scale=4, params=None, mode="world", motion="given", solver="gauss-newton", upscaler=None):
+    """Run the whole sequence; returns the list of output frames. Pass an
+    `upscaler` to inspect its state (e.g. estimated motions) afterwards."""
+    tu = upscaler or TemporalUpscaler(scale, params, mode, motion, solver)
     return [tu.step(f) for f in frames]
