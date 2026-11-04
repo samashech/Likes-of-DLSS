@@ -137,6 +137,7 @@ def main():
             (Path(args.source) / "frames.json").read_text()) else "motion estimated by registration, unreliable"
     n = len(channels[0])
     H, W = channels[0][0].truth.shape
+    print(f"progress 0/{len(METHODS)}", flush=True)
     lh, lw = channels[0][0].low.shape
     print(f"{args.name}: {n} frames, {lw}x{lh} -> {W}x{H}")
 
@@ -153,6 +154,7 @@ def main():
             psnr[mid] = [round(float(psnr_rgb(im, truth[k])), 3) for k, im in enumerate(imgs)]
         note = f"last frame {psnr[mid][-1]:.2f} dB" if has_truth else ""
         print(f"  {label:28s} {time.perf_counter() - t:6.1f}s  {note}", flush=True)
+        print(f"progress {[m for m, *_ in METHODS].index(mid) + 1}/{len(METHODS)}", flush=True)
     for k in range(n):
         save_rgb(stack([[f.low for f in ch] for ch in channels], k), out / "game" / "low" / f"{k}.webp")
 
@@ -177,7 +179,7 @@ def main():
              out / "overview.webp", quality=85)
 
     manifest = {
-        "kind": "game" if has_truth else "raw", "label": args.name, "base": f"scenes/{sid}", "ext": "webp",
+        "kind": "game" if has_truth else "raw", "label": args.name, "version": int(time.time()), "base": f"scenes/{sid}", "ext": "webp",
         "width": W, "height": H, "lowWidth": lw, "lowHeight": lh, "scale": scale, "hasTruth": has_truth,
         "switchFrame": None, "source": Path(args.source).name, "motionNote": motion_note,
         "methods": methods, "regions": regions,
@@ -192,6 +194,7 @@ def main():
     index = [s for s in index if s["id"] != sid] + [{"id": sid, "label": args.name, "kind": manifest["kind"]}]
     index_path.write_text(json.dumps(index, indent=1))
     print(f"wrote {out} ({time.perf_counter() - t0:.0f}s); listed in {index_path}")
+    print(f"scene {sid}", flush=True)
 
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import AddScene from "./AddScene.jsx";
 import Chart from "./Chart.jsx";
 import RegionPicker from "./RegionPicker.jsx";
 import Viewer, { loadImage } from "./Viewer.jsx";
@@ -67,6 +68,18 @@ export default function App() {
   const [view, setView] = useUrlState(DEFAULTS);
   const [split, setSplit] = useState(0.5);
   const [playing, setPlaying] = useState(false);
+  const [adding, setAdding] = useState(() => window.location.hash === "#add");
+
+  // after an import: reload the list, forget any stale copy, open the new scene
+  const onImported = useCallback((id) => {
+    fetch(`${DATA}/scenes.json?t=${Date.now()}`).then((r) => r.json()).then((list) => {
+      sceneCache.delete(id);
+      setScenes([{ id: "test", label: "Test scene", kind: "synthetic" }, ...list]);
+      setPlaying(false);
+      setView({ scene: id, region: "", path: "", frame: -1 });
+      setTimeout(() => setAdding(false), 1500);
+    });
+  }, [setView]);
 
   // the scene list: the synthetic test scene plus anything imported
   useEffect(() => {
@@ -86,7 +99,7 @@ export default function App() {
     if (!sceneId) return;
     if (sceneCache.has(sceneId)) { setScene(sceneCache.get(sceneId)); return; }
     setScene(null);
-    fetch(`${DATA}/scenes/${sceneId}/manifest.json`)
+    fetch(`${DATA}/scenes/${sceneId}/manifest.json?t=${Date.now()}`)
       .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
       .then((m) => { sceneCache.set(sceneId, m); setScene(m); })
       .catch(() => setLoadError(true));
@@ -102,7 +115,8 @@ export default function App() {
   const left = ids.has(view.left) ? view.left : "lagrange";
   const right = ids.has(view.right) ? view.right : "full";
   const dir = scene ? `${DATA}/${scene.base ? `${scene.base}/` : ""}` : "";
-  const src = useCallback((method, k) => `${dir}${pathId}/${method}/${k}.${scene.ext}`, [dir, pathId, scene]);
+  const ver = scene?.version ? `?v=${scene.version}` : "";
+  const src = useCallback((method, k) => `${dir}${pathId}/${method}/${k}.${scene.ext}${ver}`, [dir, pathId, scene, ver]);
 
   // playback: one frame every 250 ms, stopping on the last frame
   useEffect(() => {
@@ -139,15 +153,21 @@ export default function App() {
   }
 
   const tabs = scenes && (
-    <div className="scenes segmented" role="radiogroup" aria-label="Scene">
-      {scenes.map((s) => (
-        <label key={s.id}>
-          <input type="radio" name="scene" value={s.id} checked={sceneId === s.id}
-            onChange={() => { setPlaying(false); setView({ scene: s.id, region: "", path: "", frame: -1 }); }} />
-          <span>{s.label}</span>
-        </label>
-      ))}
-    </div>
+    <>
+      <div className="scenes">
+        <div className="segmented" role="radiogroup" aria-label="Scene">
+          {scenes.map((s) => (
+            <label key={s.id}>
+              <input type="radio" name="scene" value={s.id} checked={sceneId === s.id}
+                onChange={() => { setPlaying(false); setView({ scene: s.id, region: "", path: "", frame: -1 }); }} />
+              <span>{s.label}</span>
+            </label>
+          ))}
+        </div>
+        {!adding && <button type="button" className="btn" onClick={() => setAdding(true)}>Add a scene</button>}
+      </div>
+      {adding && <AddScene onDone={onImported} onClose={() => setAdding(false)} />}
+    </>
   );
 
   if (!scene) {
@@ -278,7 +298,7 @@ export default function App() {
                   ))}
                 </div>
               </fieldset>
-              <RegionPicker src={`${dir}${scene.overview ?? "overview.webp"}`} width={scene.width} height={scene.height}
+              <RegionPicker src={`${dir}${scene.overview ?? "overview.webp"}${ver}`} width={scene.width} height={scene.height}
                 region={pickerRegion} onPick={pick} showBox={!isFull} />
               <div className="picker__row">
                 <span className="hint">Click the thumbnail to inspect any spot.</span>
